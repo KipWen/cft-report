@@ -147,7 +147,7 @@ export function AnalysisView({ content, reportDate }: { content: string; reportD
           <span className="text-accent-primary font-semibold">风险提示</span>
         </div>
       </div>
-      <div className="border-t border-border-light pt-4 columns-1 lg:columns-2 gap-8">
+      <div className="border-t border-border-light pt-4 columns-1 md:columns-2 gap-6">
         {elements}
       </div>
     </div>

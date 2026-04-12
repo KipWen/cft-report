@@ -259,7 +259,7 @@ function MarketSection({ group }: { group: MarketGroup }) {
   return (
     <div className="mb-4">
       <h3 className="text-[13px] font-semibold text-text-primary tracking-tight mb-2">{group.name}</h3>
-      <div className="grid grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
         {group.rows.map(row => (
           <InstrumentCard key={row.instrument} row={row} />
         ))}
@@ -284,7 +284,7 @@ function SummaryHeader({ data }: { data: ReportData }) {
                            bearCount > bullCount + 3 ? '整体偏空' : '多空均衡';
 
   return (
-    <div className="grid grid-cols-4 gap-3 mb-5">
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-5">
       <div className="col-span-2 rounded-lg border border-border-light bg-bg-white p-3.5">
         <p className="text-[11px] text-text-muted font-medium uppercase tracking-wider">市场情绪</p>
         <p className="text-lg font-bold text-text-primary mt-0.5">{overallSentiment}</p>
