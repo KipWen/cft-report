@@ -35,7 +35,19 @@ const SKIP_COLS = new Set([
 // ============================================================================
 
 async function fetchCftc(endpoint: string, startDate: string): Promise<CftcRow[]> {
+  const isTff = endpoint.includes('gpe5-46if');
+  const selectCols = [
+    'market_and_exchange_names',
+    'report_date_as_yyyy_mm_dd',
+    'cftc_contract_market_code',
+    'open_interest_all',
+    ...(isTff
+      ? ['lev_money_positions_long', 'lev_money_positions_short']
+      : ['m_money_positions_long_all', 'm_money_positions_short_all']),
+  ].join(',');
+
   const params = new URLSearchParams({
+    '$select': selectCols,
     '$where': `report_date_as_yyyy_mm_dd >= '${startDate}'`,
     '$limit': '50000',
     '$order': 'report_date_as_yyyy_mm_dd ASC',
