@@ -1,3 +1,4 @@
+import { ProxyAgent } from 'undici';
 import { ContractConfig } from './contracts';
 import { InstrumentRow, PriceInfo } from './types';
 
@@ -5,6 +6,9 @@ const CFTC_TFF_URL = 'https://publicreporting.cftc.gov/resource/gpe5-46if.json';
 const CFTC_DISAGG_URL = 'https://publicreporting.cftc.gov/resource/72hh-3qpy.json';
 const LOOKBACK_DAYS = 1200;
 const ZSCORE_WINDOW = 156;
+
+const proxyUrl = process.env.HTTP_PROXY || process.env.HTTPS_PROXY;
+const proxyDispatcher = proxyUrl ? new ProxyAgent({ uri: proxyUrl }) : undefined;
 
 interface CftcRow {
   market_and_exchange_names: string;
@@ -58,6 +62,7 @@ async function fetchCftc(endpoint: string, startDate: string): Promise<CftcRow[]
     try {
       const resp = await fetch(`${endpoint}?${params}`, {
         signal: AbortSignal.timeout(120000),
+        ...(proxyDispatcher ? { dispatcher: proxyDispatcher } : {}),
       });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       data = await resp.json();
@@ -233,6 +238,7 @@ async function fetchYahooPrice(ticker: string, startDate: string, endDate: strin
     const resp = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0' },
       signal: AbortSignal.timeout(15000),
+      ...(proxyDispatcher ? { dispatcher: proxyDispatcher } : {}),
     });
     if (!resp.ok) return [];
     const json = await resp.json();
@@ -340,13 +346,18 @@ export async function generateReport(targetDate?: string) {
   console.log(`  -> ${dfDisagg.length} rows`);
 
   if (targetDate) {
-    dfTff = dfTff.filter(r => r.report_date <= targetDate);
-    dfDisagg = dfDisagg.filter(r => r.report_date <= targetDate);
+    // 回填模式：精确匹配目标日期，避免数据不全时静默降级到上一周
+    dfTff = dfTff.filter(r => r.report_date.startsWith(targetDate));
+    dfDisagg = dfDisagg.filter(r => r.report_date.startsWith(targetDate));
+    if (!dfTff.length || !dfDisagg.length) {
+      throw new Error(`No CFTC data found for target date: ${targetDate}`);
+    }
   }
 
-  const reportDate = dfTff.length
-    ? dfTff.reduce((max, r) => r.report_date > max ? r.report_date : max, dfTff[0].report_date).slice(0, 10)
-    : 'N/A';
+  const reportDate = targetDate
+    || (dfTff.length
+      ? dfTff.reduce((max, r) => r.report_date > max ? r.report_date : max, dfTff[0].report_date).slice(0, 10)
+      : 'N/A');
   console.log(`  Report date: ${reportDate}`);
 
   console.log('[3/4] Fetching price data...');

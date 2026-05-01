@@ -1,4 +1,8 @@
+import { ProxyAgent } from 'undici';
 import { ReportData, InstrumentRow } from './types';
+
+const proxyUrl = process.env.HTTP_PROXY || process.env.HTTPS_PROXY;
+const proxyDispatcher = proxyUrl ? new ProxyAgent({ uri: proxyUrl }) : undefined;
 
 function formatRowsForPrompt(rows: InstrumentRow[], label: string): string {
   let text = `\n### ${label}\n`;
@@ -114,6 +118,7 @@ export async function generateAnalysis(data: ReportData): Promise<string> {
         temperature: 0.2,
       }),
       signal: AbortSignal.timeout(120000),
+      ...(proxyDispatcher ? { dispatcher: proxyDispatcher } : {}),
     });
 
     if (!resp.ok) {
