@@ -1,4 +1,4 @@
-import { ProxyAgent } from 'undici';
+import './proxy';
 import { ContractConfig } from './contracts';
 import { InstrumentRow, PriceInfo } from './types';
 
@@ -6,9 +6,6 @@ const CFTC_TFF_URL = 'https://publicreporting.cftc.gov/resource/gpe5-46if.json';
 const CFTC_DISAGG_URL = 'https://publicreporting.cftc.gov/resource/72hh-3qpy.json';
 const LOOKBACK_DAYS = 1200;
 const ZSCORE_WINDOW = 156;
-
-const proxyUrl = process.env.HTTP_PROXY || process.env.HTTPS_PROXY;
-const proxyDispatcher = proxyUrl ? new ProxyAgent({ uri: proxyUrl }) : undefined;
 
 interface CftcRow {
   market_and_exchange_names: string;
@@ -62,7 +59,6 @@ async function fetchCftc(endpoint: string, startDate: string): Promise<CftcRow[]
     try {
       const resp = await fetch(`${endpoint}?${params}`, {
         signal: AbortSignal.timeout(120000),
-        ...(proxyDispatcher ? { dispatcher: proxyDispatcher } : {}),
       });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       data = await resp.json();
@@ -238,7 +234,6 @@ async function fetchYahooPrice(ticker: string, startDate: string, endDate: strin
     const resp = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0' },
       signal: AbortSignal.timeout(15000),
-      ...(proxyDispatcher ? { dispatcher: proxyDispatcher } : {}),
     });
     if (!resp.ok) return [];
     const json = await resp.json();
@@ -313,11 +308,16 @@ function buildTable(
   longCol: string,
   shortCol: string,
   priceData: Record<string, PriceInfo>,
+  targetDate?: string,
 ): InstrumentRow[] {
   const result: InstrumentRow[] = [];
   for (const c of contracts) {
-    const matched = matchCftc(rows, c.cftc);
+    let matched = matchCftc(rows, c.cftc);
     if (!matched || !matched.length) continue;
+    if (targetDate) {
+      matched = matched.filter(r => r.report_date <= targetDate);
+    }
+    if (!matched.length) continue;
     const pg = posGroup(matched, longCol, shortCol);
     const pd = priceData[c.name];
     result.push({
@@ -345,19 +345,19 @@ export async function generateReport(targetDate?: string) {
   let dfDisagg = await fetchCftc(CFTC_DISAGG_URL, startDate);
   console.log(`  -> ${dfDisagg.length} rows`);
 
-  if (targetDate) {
-    // 回填模式：精确匹配目标日期，避免数据不全时静默降级到上一周
-    dfTff = dfTff.filter(r => r.report_date.startsWith(targetDate));
-    dfDisagg = dfDisagg.filter(r => r.report_date.startsWith(targetDate));
-    if (!dfTff.length || !dfDisagg.length) {
-      throw new Error(`No CFTC data found for target date: ${targetDate}`);
-    }
-  }
-
   const reportDate = targetDate
     || (dfTff.length
       ? dfTff.reduce((max, r) => r.report_date > max ? r.report_date : max, dfTff[0].report_date).slice(0, 10)
       : 'N/A');
+
+  if (targetDate) {
+    // 回填模式：验证目标日期数据存在，避免静默降级到上一周
+    const hasTff = dfTff.some(r => r.report_date.startsWith(targetDate));
+    const hasDisagg = dfDisagg.some(r => r.report_date.startsWith(targetDate));
+    if (!hasTff || !hasDisagg) {
+      throw new Error(`No CFTC data found for target date: ${targetDate}`);
+    }
+  }
   console.log(`  Report date: ${reportDate}`);
 
   console.log('[3/4] Fetching price data...');
@@ -366,8 +366,8 @@ export async function generateReport(targetDate?: string) {
   console.log(`  -> ${Object.keys(priceData).length} instruments`);
 
   console.log('[4/4] Building tables...');
-  const tffRows = buildTable(dfTff, (await import('./contracts')).TFF_CONTRACTS, 'lev_money_positions_long', 'lev_money_positions_short', priceData);
-  const disaggRows = buildTable(dfDisagg, (await import('./contracts')).DISAGG_CONTRACTS, 'm_money_positions_long_all', 'm_money_positions_short_all', priceData);
+  const tffRows = buildTable(dfTff, (await import('./contracts')).TFF_CONTRACTS, 'lev_money_positions_long', 'lev_money_positions_short', priceData, reportDate);
+  const disaggRows = buildTable(dfDisagg, (await import('./contracts')).DISAGG_CONTRACTS, 'm_money_positions_long_all', 'm_money_positions_short_all', priceData, reportDate);
 
   return {
     report_date: reportDate,

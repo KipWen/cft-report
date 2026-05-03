@@ -11,9 +11,9 @@ import { ReportNotes } from './ReportNotes';
 type Tab = 'table' | 'report' | 'analysis';
 
 const TAB_LABELS: Record<Tab, string> = {
-  table: 'Table',
-  report: 'Report',
-  analysis: 'Analysis',
+  table: '数据表',
+  report: '仪表盘',
+  analysis: 'AI分析',
 };
 
 export function ReportLayout({
@@ -54,7 +54,7 @@ export function ReportLayout({
       `}>
         <div className="px-4 pt-5 pb-4 flex items-center justify-between">
           <h1 className="text-[15px] font-semibold text-text-primary tracking-tight" style={{ fontFamily: 'var(--font-serif)' }}>
-            CFTC Report
+            CFTC 持仓报告
           </h1>
           <button
             onClick={() => setSidebarOpen(false)}

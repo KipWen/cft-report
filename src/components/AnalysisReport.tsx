@@ -111,7 +111,7 @@ export function AnalysisReport({ content, reportDate }: { content: string; repor
       {/* Report Header */}
       <div className="mb-6">
         <p className="text-[10px] font-semibold text-text-muted uppercase tracking-widest mb-1">
-          Weekly Analysis
+          周度分析
         </p>
         <h1 className="text-xl font-bold text-text-primary tracking-tight leading-tight" style={{ fontFamily: 'var(--font-serif)' }}>
           CFTC 持仓深度分析
@@ -120,7 +120,7 @@ export function AnalysisReport({ content, reportDate }: { content: string; repor
           <span className="text-[10px] text-text-muted">{reportDate}</span>
           <span className="w-px h-3 bg-border-medium" />
           <span className="text-[9px] text-text-muted bg-bg-secondary px-1.5 py-0.5 rounded font-medium">
-            AI Generated
+            AI 生成
           </span>
         </div>
       </div>

@@ -1,8 +1,5 @@
-import { ProxyAgent } from 'undici';
+import fetch from 'node-fetch';
 import { ReportData, InstrumentRow } from './types';
-
-const proxyUrl = process.env.HTTP_PROXY || process.env.HTTPS_PROXY;
-const proxyDispatcher = proxyUrl ? new ProxyAgent({ uri: proxyUrl }) : undefined;
 
 function formatRowsForPrompt(rows: InstrumentRow[], label: string): string {
   let text = `\n### ${label}\n`;
@@ -13,10 +10,10 @@ function formatRowsForPrompt(rows: InstrumentRow[], label: string): string {
       text += `\n**${r.section}**\n`;
     }
     const priceStr = r.price_chg != null ? `${r.price_chg > 0 ? '+' : ''}${r.price_chg.toFixed(1)}%` : 'N/A';
-    text += `- ${r.instrument}: 净持仓=${r.net.toLocaleString()} (z=${r.net_z ?? 'N/A'}), `;
-    text += `多头=${r.long.toLocaleString()} (z=${r.long_z ?? 'N/A'}, 周变化=${r.long_ww.toLocaleString()}), `;
-    text += `空头=${r.short.toLocaleString()} (z=${r.short_z ?? 'N/A'}, 周变化=${r.short_ww.toLocaleString()}), `;
-    text += `动作=${r.flow_state || '无'}, 同期涨跌=${priceStr}\n`;
+    text += `- ${r.instrument}: 净=${r.net.toLocaleString()}(z${r.net_z ?? 'N/A'}), `;
+    text += `多=${r.long.toLocaleString()}(z${r.long_z ?? 'N/A'},Δ${r.long_ww.toLocaleString()}), `;
+    text += `空=${r.short.toLocaleString()}(z${r.short_z ?? 'N/A'},Δ${r.short_ww.toLocaleString()}), `;
+    text += `流=${r.flow_state || '无'},价=${priceStr}\n`;
   }
   return text;
 }
@@ -90,6 +87,7 @@ ${disaggText}
 export async function generateAnalysis(data: ReportData): Promise<string> {
   const apiKey = process.env.AIHUBMIX_API_KEY;
   const apiUrl = process.env.AIHUBMIX_API_URL || 'https://aihubmix.com/v1/chat/completions';
+  const model = process.env.AI_MODEL || 'claude-sonnet-4-20250514';
 
   if (!apiKey) {
     console.warn('AIHUBMIX_API_KEY not set, skipping AI analysis');
@@ -106,7 +104,7 @@ export async function generateAnalysis(data: ReportData): Promise<string> {
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model,
         messages: [
           {
             role: 'system',
@@ -114,20 +112,18 @@ export async function generateAnalysis(data: ReportData): Promise<string> {
           },
           { role: 'user', content: prompt },
         ],
-        max_tokens: 4000,
-        temperature: 0.2,
+        max_tokens: 8000,
       }),
-      signal: AbortSignal.timeout(120000),
-      ...(proxyDispatcher ? { dispatcher: proxyDispatcher } : {}),
-    });
+      timeout: 300000,
+    } as any);
 
     if (!resp.ok) {
       const err = await resp.text();
-      console.error('AI analysis failed:', resp.status, err);
+      console.error(`AI analysis failed [${resp.status}] — URL: ${apiUrl} — Model: ${model} — ${err.slice(0, 500)}`);
       return '';
     }
 
-    const json = await resp.json();
+    const json = (await resp.json()) as { choices?: Array<{ message?: { content?: string } }> };
     return json.choices?.[0]?.message?.content || '';
   } catch (e) {
     console.error('AI analysis error:', e);
