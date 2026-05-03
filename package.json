@@ -14,7 +14,6 @@
     "ai": "^6.0.158",
     "https-proxy-agent": "^9.0.0",
     "next": "16.2.3",
-    "node-fetch": "^2.7.0",
     "proxy-agent": "^8.0.1",
     "react": "19.2.4",
     "react-dom": "19.2.4"
@@ -22,7 +21,6 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
-    "@types/node-fetch": "^2.6.13",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

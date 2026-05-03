@@ -1,4 +1,3 @@
-import fetch from 'node-fetch';
 import { ReportData, InstrumentRow } from './types';
 
 function formatRowsForPrompt(rows: InstrumentRow[], label: string): string {
@@ -114,8 +113,8 @@ export async function generateAnalysis(data: ReportData): Promise<string> {
         ],
         max_tokens: 4000,
       }),
-      timeout: 300000,
-    } as any);
+      signal: AbortSignal.timeout(300000),
+    });
 
     if (!resp.ok) {
       const err = await resp.text();
