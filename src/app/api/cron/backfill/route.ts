@@ -9,8 +9,10 @@ export const maxDuration = 300;
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
+  const urlSecret = request.nextUrl.searchParams.get('secret');
   const isAuthorized =
     (cronSecret && authHeader === `Bearer ${cronSecret}`) ||
+    (cronSecret && urlSecret === cronSecret) ||
     (!cronSecret && process.env.NODE_ENV === 'development');
 
   if (!isAuthorized) {

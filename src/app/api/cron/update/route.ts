@@ -13,11 +13,15 @@ export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
 
+  // Support both Authorization header and URL query parameter
+  const urlSecret = request.nextUrl.searchParams.get('secret');
+
   // In production: must be Vercel Cron OR have correct secret
   // In development: allow if CRON_SECRET is not set (local testing only)
   const isAuthorized =
     isVercelCron ||
     (cronSecret && authHeader === `Bearer ${cronSecret}`) ||
+    (cronSecret && urlSecret === cronSecret) ||
     (!cronSecret && process.env.NODE_ENV === 'development');
 
   if (!isAuthorized) {
