@@ -1,4 +1,4 @@
-import { put, list, head } from '@vercel/blob';
+import { put, list } from '@vercel/blob';
 import { ReportData } from './types';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -18,7 +18,7 @@ export async function saveReport(data: ReportData): Promise<string> {
 
   if (IS_VERCEL) {
     const blob = await put(filename, content, {
-      access: 'public',
+      access: 'private',
       contentType: 'application/json',
       addRandomSuffix: false,
     });
@@ -37,7 +37,7 @@ export async function loadReport(date: string): Promise<ReportData | null> {
       const filename = `reports/${date}.json`;
       const blobResult = await list({ prefix: filename });
       if (blobResult.blobs.length === 0) return null;
-      const resp = await fetch(blobResult.blobs[0].url);
+      const resp = await fetch(blobResult.blobs[0].downloadUrl);
       if (!resp.ok) return null;
       return await resp.json();
     } catch {
