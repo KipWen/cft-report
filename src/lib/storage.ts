@@ -38,7 +38,9 @@ export async function loadReport(date: string): Promise<ReportData | null> {
       const filename = `reports/${date}.json`;
       const blobResult = await list({ prefix: filename });
       if (blobResult.blobs.length === 0) return null;
-      const resp = await fetch(blobResult.blobs[0].downloadUrl);
+      const resp = await fetch(blobResult.blobs[0].url, {
+        headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
+      });
       if (!resp.ok) return null;
       return await resp.json();
     } catch {
