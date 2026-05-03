@@ -28,14 +28,14 @@ export async function GET(request: NextRequest) {
     // First fetch data to get the actual report date
     const reportData: ReportData = await generateReport(targetDate);
 
-    // Check if this actual report date already exists (immutable)
+    const force = request.nextUrl.searchParams.get('force') === '1';
     const existing = await loadReport(reportData.report_date);
-    if (existing) {
+    if (existing && !force) {
       return NextResponse.json({
         status: 'skipped',
         report_date: reportData.report_date,
         requested_date: targetDate,
-        message: 'Already exists',
+        message: 'Already exists. Add &force=1 to regenerate.',
       });
     }
 

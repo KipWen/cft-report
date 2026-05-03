@@ -32,14 +32,14 @@ export async function GET(request: NextRequest) {
     console.log('Starting CFTC report generation...');
     const reportData: ReportData = await generateReport();
 
-    // Check if report already exists — analysis results are immutable
+    const force = request.nextUrl.searchParams.get('force') === '1';
     const existing = await loadReport(reportData.report_date);
-    if (existing) {
-      console.log(`Report for ${reportData.report_date} already exists, immutable — skipping.`);
+    if (existing && !force) {
+      console.log(`Report for ${reportData.report_date} already exists, skipping. Add &force=1 to regenerate.`);
       return NextResponse.json({
         status: 'skipped',
         report_date: reportData.report_date,
-        message: 'Report already exists and is immutable',
+        message: 'Report already exists. Add &force=1 to regenerate.',
       });
     }
 
