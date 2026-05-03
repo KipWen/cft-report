@@ -1,6 +1,6 @@
 # CFTC 持仓报告分析
 
-基于 CFTC 期货持仓数据（Leveraged Funds & Managed Money）自动生成周度宏观分析报告，结合 Claude AI 进行深度策略研判。
+基于 CFTC 期货持仓数据（Leveraged Funds & Managed Money）自动生成周度宏观分析报告，结合 Claude AI / Kimi AI 进行深度策略研判。
 
 ## 数据来源
 
@@ -27,11 +27,40 @@ npm run dev
 
 ## 环境变量
 
+复制 `.env.example` 为 `.env` 并填写：
+
 | 变量 | 说明 | 必填 |
 |---|---|---|
-| `AIHUBMIX_API_KEY` | AI 分析 API 密钥 | 否 |
-| `AIHUBMIX_API_URL` | AI API 地址（默认 AIHubMix） | 否 |
+| `AIHUBMIX_API_KEY` | AI 分析 API 密钥 | 否（不填则跳过 AI 分析） |
+| `AIHUBMIX_API_URL` | AI API 地址 | 否 |
+| `AI_MODEL` | AI 模型名称 | 否 |
 | `HTTP_PROXY` / `HTTPS_PROXY` | 代理地址（国内访问 CFTC API 需要） | 视网络情况 |
+| `CRON_SECRET` | Cron API 鉴权密钥 | 否（生产环境建议设置） |
+
+### AI 配置示例
+
+**Kimi（推荐）**：
+```env
+AIHUBMIX_API_URL=https://api.moonshot.cn/v1/chat/completions
+AIHUBMIX_API_KEY=sk-xxxxxxxx
+AI_MODEL=kimi-k2.6
+```
+
+**DeepSeek**：
+```env
+AIHUBMIX_API_URL=https://api.deepseek.com/v1/chat/completions
+AIHUBMIX_API_KEY=sk-xxxxxxxx
+AI_MODEL=deepseek-chat
+```
+
+**OpenAI**：
+```env
+AIHUBMIX_API_URL=https://api.openai.com/v1/chat/completions
+AIHUBMIX_API_KEY=sk-xxxxxxxx
+AI_MODEL=gpt-4o
+```
+
+> **安全提示**：`.env` 文件已加入 `.gitignore`，不会被提交到 Git。请勿将真实 API 密钥硬编码到代码中。
 
 ## 生成报告
 
@@ -41,6 +70,11 @@ curl http://localhost:3000/api/cron/update
 
 # 回填指定日期
 curl "http://localhost:3000/api/cron/backfill?date=2026-04-14"
+```
+
+本地开发时无需 `CRON_SECRET`，生产环境需在请求头中携带：
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" "http://localhost:3000/api/cron/update"
 ```
 
 ## 部署
@@ -54,6 +88,12 @@ vercel
 
 需要在 Vercel Dashboard 设置环境变量和创建 Blob 存储。
 
+### 部署注意事项
+
+- **Vercel Hobby 版函数超时限制为 10 秒**，可能不足以完成 CFTC 数据抓取 + AI 分析。建议升级到 Pro 计划（支持 300 秒）。
+- 生产环境务必设置 `CRON_SECRET`，防止 API 被恶意调用。
+- CFTC API 偶尔不稳定，已内置 3 次重试机制。
+
 ## 技术栈
 
 - Next.js 16
@@ -61,3 +101,8 @@ vercel
 - Tailwind CSS
 - Vercel Blob
 - CFTC Socrata API
+- Kimi / DeepSeek / OpenAI API
+
+## Contributors
+
+- [KipWen](https://github.com/KipWen)
