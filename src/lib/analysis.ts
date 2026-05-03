@@ -112,7 +112,7 @@ export async function generateAnalysis(data: ReportData): Promise<string> {
           },
           { role: 'user', content: prompt },
         ],
-        max_tokens: 8000,
+        max_tokens: 4000,
       }),
       timeout: 300000,
     } as any);

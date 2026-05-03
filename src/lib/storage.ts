@@ -21,6 +21,7 @@ export async function saveReport(data: ReportData): Promise<string> {
       access: 'private',
       contentType: 'application/json',
       addRandomSuffix: false,
+      allowOverwrite: true,
     });
     return blob.url;
   }
