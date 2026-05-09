@@ -2,12 +2,12 @@
 export const KEYWORD_STYLES: { pattern: RegExp; className: string }[] = [
   // 看多信号词 — 绿色
   {
-    pattern: /(?:多头建仓|多头挤压|空头回补|看多|做多|抄底|反弹|上涨|偏多|牛市|risk-on|买入)/g,
+    pattern: /(?:多头建仓|空头挤压|空头回补|看多|做多|抄底|反弹|上涨|偏多|牛市|risk-on|买入)/g,
     className: 'text-green-text font-semibold',
   },
   // 看空信号词 — 红色
   {
-    pattern: /(?:空头建仓|空头施压|多头平仓|看空|做空|抛售|下跌|偏空|熊市|risk-off|卖出)/g,
+    pattern: /(?:空头建仓|多头挤压|多头平仓|看空|做空|抛售|下跌|偏空|熊市|risk-off|卖出)/g,
     className: 'text-red-text font-semibold',
   },
   // 风险/极端词 — 橙色

@@ -105,7 +105,7 @@
       "short_z": 3.1,
       "short_ww": 4396,
       "short_ww_z": 2.4,
-      "flow_state": "空头施压",
+      "flow_state": "空头挤压",
       "instrument": "日经225",
       "section": "股指",
       "price_chg": -2.27
@@ -267,7 +267,7 @@
       "short_z": -1.8,
       "short_ww": -1225,
       "short_ww_z": -1.1,
-      "flow_state": "多头挤压",
+      "flow_state": "空头挤压",
       "instrument": "比特币",
       "section": "外汇/加密",
       "price_chg": null
@@ -377,7 +377,7 @@
       "short_z": -1.9,
       "short_ww": -29023,
       "short_ww_z": -1,
-      "flow_state": "多头挤压",
+      "flow_state": "空头挤压",
       "instrument": "玉米",
       "section": "农产品",
       "price_chg": -1.03

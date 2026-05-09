@@ -12,8 +12,8 @@ type Sentiment = 'bullish' | 'bearish' | 'neutral';
 function getSentiment(row: InstrumentRow): { sentiment: Sentiment; label: string; strength: number } {
   const z = row.net_z ?? 0;
   const flow = row.flow_state;
-  const bullFlows = new Set(['多头建仓', '空头回补', '多头挤压']);
-  const bearFlows = new Set(['空头建仓', '多头平仓', '空头施压']);
+  const bullFlows = new Set(['多头建仓', '空头回补', '空头挤压']);
+  const bearFlows = new Set(['空头建仓', '多头平仓', '多头挤压']);
 
   let score = 0;
   if (z > 0.5) score += 1;
@@ -35,10 +35,10 @@ function getFlowLabel(flow: string): string {
   const map: Record<string, string> = {
     '多头建仓': '资金做多',
     '空头回补': '空头撤退',
-    '多头挤压': '多头强势挤压',
+    '空头挤压': '逼空/空头踩踏',
     '空头建仓': '资金做空',
     '多头平仓': '多头撤退',
-    '空头施压': '空头强势施压',
+    '多头挤压': '逼多/多头踩踏',
     '多空双增': '多空分歧加大',
     '多空双减': '多空同时离场',
   };
@@ -58,8 +58,8 @@ function isCrowded(row: InstrumentRow): string | null {
 
 function isDivergence(row: InstrumentRow): boolean {
   if (!row.flow_state || row.price_chg == null) return false;
-  const bull = new Set(['多头建仓', '空头回补', '多头挤压']);
-  const bear = new Set(['空头建仓', '多头平仓', '空头施压']);
+  const bull = new Set(['多头建仓', '空头回补', '空头挤压']);
+  const bear = new Set(['空头建仓', '多头平仓', '多头挤压']);
   return (bull.has(row.flow_state) && row.price_chg < -0.05) ||
          (bear.has(row.flow_state) && row.price_chg > 0.05);
 }
@@ -153,8 +153,8 @@ function getCardInsight(row: InstrumentRow): string {
     return `${dir}仓位处于3年极端水平，注意反转风险`;
   }
 
-  const bull = new Set(['多头建仓', '空头回补', '多头挤压']);
-  const bear = new Set(['空头建仓', '多头平仓', '空头施压']);
+  const bull = new Set(['多头建仓', '空头回补', '空头挤压']);
+  const bear = new Set(['空头建仓', '多头平仓', '多头挤压']);
   if (flow && price != null) {
     if (bull.has(flow) && price < -0.5) return `资金看多但价格下跌，关注是否为抄底信号`;
     if (bear.has(flow) && price > 0.5) return `资金看空但价格上涨，警惕获利回吐`;
@@ -169,10 +169,10 @@ function getCardInsight(row: InstrumentRow): string {
     const flowDesc: Record<string, string> = {
       '多头建仓': '机构正在积极建立多头仓位',
       '空头回补': '空头正在平仓离场，减轻下行压力',
-      '多头挤压': '多头强势进入，空头被迫回补',
+      '空头挤压': '空头被挤压踩踏，被迫平仓回补',
       '空头建仓': '机构正在积极建立空头仓位',
       '多头平仓': '多头获利了结，仓位减少',
-      '空头施压': '空头强势施压，多头被迫离场',
+      '多头挤压': '多头被挤压踩踏，被迫平仓离场',
       '多空双增': '多空分歧加大，波动率可能上升',
       '多空双减': '多空同时减仓，市场观望情绪浓',
     };

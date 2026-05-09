@@ -7,8 +7,8 @@ import { FlowTag, CrowdingTag } from './FlowTag';
 
 function isDivergence(flowState: string, priceChg: number | null): boolean {
   if (!flowState || priceChg == null) return false;
-  const bull = new Set(['多头建仓', '空头回补', '多头挤压']);
-  const bear = new Set(['空头建仓', '多头平仓', '空头施压']);
+  const bull = new Set(['多头建仓', '空头回补', '空头挤压']);
+  const bear = new Set(['空头建仓', '多头平仓', '多头挤压']);
   if (bull.has(flowState) && priceChg < -0.05) return true;
   if (bear.has(flowState) && priceChg > 0.05) return true;
   return false;

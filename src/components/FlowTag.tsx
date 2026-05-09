@@ -1,7 +1,7 @@
 'use client';
 
-const BULL_STATES = new Set(['多头建仓', '空头回补', '多头挤压']);
-const BEAR_STATES = new Set(['空头建仓', '多头平仓', '空头施压']);
+const BULL_STATES = new Set(['多头建仓', '空头回补', '空头挤压']);
+const BEAR_STATES = new Set(['空头建仓', '多头平仓', '多头挤压']);
 
 export function FlowTag({ state }: { state: string }) {
   if (!state) return <td className="px-2 py-1.5" />;

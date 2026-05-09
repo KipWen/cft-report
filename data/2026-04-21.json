@@ -15,7 +15,7 @@
       "short_z": 1.2,
       "short_ww": 150733,
       "short_ww_z": 3.4,
-      "flow_state": "空头施压",
+      "flow_state": "空头挤压",
       "instrument": "标普500",
       "section": "股指",
       "price_chg": null
@@ -87,7 +87,7 @@
       "short_z": 0.3,
       "short_ww": -24377,
       "short_ww_z": -3.8,
-      "flow_state": "多头挤压",
+      "flow_state": "空头挤压",
       "instrument": "MSCI发达市场",
       "section": "股指",
       "price_chg": null
@@ -195,7 +195,7 @@
       "short_z": 0.3,
       "short_ww": -11468,
       "short_ww_z": -1.6,
-      "flow_state": "多头挤压",
+      "flow_state": "空头挤压",
       "instrument": "欧元/美元",
       "section": "外汇/加密",
       "price_chg": -0.47

@@ -141,7 +141,7 @@
       "short_z": 0.8,
       "short_ww": -102701,
       "short_ww_z": -1.4,
-      "flow_state": "多头挤压",
+      "flow_state": "空头挤压",
       "instrument": "10年期美债",
       "section": "债券",
       "price_chg": -0.75
@@ -159,7 +159,7 @@
       "short_z": -1.1,
       "short_ww": 35030,
       "short_ww_z": 1.9,
-      "flow_state": "空头施压",
+      "flow_state": "空头挤压",
       "instrument": "超长期美债",
       "section": "债券",
       "price_chg": -1.35

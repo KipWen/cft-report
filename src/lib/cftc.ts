@@ -173,8 +173,8 @@ function flowState(zDlong: number | null, zDshort: number | null): string {
   if (zDlong == null || zDshort == null) return '';
   const zl = zDlong, zs = zDshort;
 
-  if (zl >= 0.8 && zs <= -0.8) return '多头挤压';
-  if (zl <= -0.8 && zs >= 0.8) return '空头施压';
+  if (zl >= 0.8 && zs <= -0.8) return '空头挤压';
+  if (zl <= -0.8 && zs >= 0.8) return '多头挤压';
   if (zl >= 0.8 && zs >= 0.8) return '多空双增';
   if (zl <= -0.8 && zs <= -0.8) return '多空双减';
   if (zl >= 0.8 && Math.abs(zs) < 0.5) return '多头建仓';
