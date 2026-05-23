@@ -1,19 +1,22 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { ReportData } from '@/lib/types';
 import { PositionTable } from './PositionTable';
 import { ReportDashboard } from './ReportDashboard';
 import { AnalysisView } from './AnalysisView';
 import { ReportNotes } from './ReportNotes';
+import { TrendView } from './TrendView';
+import { ErrorBoundary } from './ErrorBoundary';
 
-type Tab = 'table' | 'report' | 'analysis';
+type Tab = 'table' | 'report' | 'analysis' | 'trend';
 
 const TAB_LABELS: Record<Tab, string> = {
   table: '数据表',
   report: '仪表盘',
   analysis: 'AI分析',
+  trend: '历史趋势',
 };
 
 export function ReportLayout({
@@ -28,10 +31,13 @@ export function ReportLayout({
   const [tab, setTab] = useState<Tab>('table');
   const [tableCompact, setTableCompact] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
   const switchDate = (d: string) => {
-    router.push(`/?date=${d}`);
+    startTransition(() => {
+      router.push(`/?date=${d}`);
+    });
     setSidebarOpen(false);
   };
 
@@ -96,7 +102,19 @@ export function ReportLayout({
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto bg-bg-primary w-full">
+      <main className="flex-1 overflow-y-auto bg-bg-primary w-full relative">
+        {/* Loading overlay for date switching */}
+        {isPending && (
+          <div className="absolute inset-0 z-20 bg-bg-primary/60 backdrop-blur-[1px] flex items-start justify-center pt-32">
+            <div className="flex items-center gap-2.5 bg-bg-white border border-border-light rounded-lg shadow-md px-4 py-3">
+              <svg className="w-4 h-4 animate-spin text-accent-primary" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              <span className="text-[13px] text-text-secondary">加载中...</span>
+            </div>
+          </div>
+        )}
         {/* Top Bar */}
         <div className="sticky top-0 z-10 bg-bg-primary/95 backdrop-blur-sm border-b border-border-light">
           <div className="px-3 sm:px-5 py-2 sm:py-2.5 flex items-center justify-between gap-2">
@@ -110,7 +128,7 @@ export function ReportLayout({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
               </button>
-              {(['table', 'report', 'analysis'] as Tab[]).map(t => (
+              {(['table', 'report', 'analysis', 'trend'] as Tab[]).map(t => (
                 <button
                   key={t}
                   onClick={() => setTab(t)}
@@ -145,7 +163,7 @@ export function ReportLayout({
         {/* Content */}
         <div className="px-3 sm:px-5 py-3 sm:py-4">
           {tab === 'table' && (
-            <>
+            <ErrorBoundary key={`${currentDate}-table`}>
               <div className="flex items-center gap-1 mb-3">
                 <button
                   onClick={() => setTableCompact(true)}
@@ -177,10 +195,23 @@ export function ReportLayout({
                 compact={tableCompact}
               />
               <ReportNotes />
-            </>
+            </ErrorBoundary>
           )}
-          {tab === 'report' && <ReportDashboard data={report} />}
-          {tab === 'analysis' && <AnalysisView content={report.ai_analysis || ''} reportDate={report.report_date} />}
+          {tab === 'report' && (
+            <ErrorBoundary key={`${currentDate}-report`}>
+              <ReportDashboard data={report} />
+            </ErrorBoundary>
+          )}
+          {tab === 'analysis' && (
+            <ErrorBoundary key={`${currentDate}-analysis`}>
+              <AnalysisView content={report.ai_analysis || ''} reportDate={report.report_date} />
+            </ErrorBoundary>
+          )}
+          {tab === 'trend' && (
+            <ErrorBoundary key={`${currentDate}-trend`}>
+              <TrendView />
+            </ErrorBoundary>
+          )}
         </div>
       </main>
     </div>

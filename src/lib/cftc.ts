@@ -32,6 +32,47 @@ const SKIP_COLS = new Set([
 ]);
 
 // ============================================================================
+// SHARED FETCH WITH RETRY
+// ============================================================================
+
+const RETRYABLE_STATUSES = new Set([429, 502, 503, 504]);
+
+async function fetchWithRetry(
+  url: string,
+  options: { timeout?: number; maxRetries?: number; retryDelay?: number } & Omit<RequestInit, 'signal'>,
+): Promise<Response> {
+  const { timeout = 30000, maxRetries = 3, retryDelay = 3000, ...fetchOptions } = options;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const resp = await fetch(url, {
+        ...fetchOptions,
+        signal: AbortSignal.timeout(timeout),
+      });
+
+      if (resp.ok) return resp;
+
+      // Transient server errors and rate limits → retry
+      if (RETRYABLE_STATUSES.has(resp.status) && attempt < maxRetries - 1) {
+        await new Promise(r => setTimeout(r, retryDelay * (attempt + 1)));
+        continue;
+      }
+
+      return resp; // Non-retryable — return as-is for caller to handle
+    } catch (e) {
+      // Network errors / timeouts → retry
+      if (attempt < maxRetries - 1) {
+        await new Promise(r => setTimeout(r, retryDelay * (attempt + 1)));
+      } else {
+        throw e;
+      }
+    }
+  }
+
+  throw new Error('fetchWithRetry: unreachable');
+}
+
+// ============================================================================
 // DATA FETCHING
 // ============================================================================
 
@@ -54,23 +95,14 @@ async function fetchCftc(endpoint: string, startDate: string): Promise<CftcRow[]
     '$order': 'report_date_as_yyyy_mm_dd ASC',
   });
 
-  let data: Record<string, unknown>[] = [];
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const resp = await fetch(`${endpoint}?${params}`, {
-        signal: AbortSignal.timeout(120000),
-      });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      data = await resp.json();
-      break;
-    } catch (e) {
-      if (attempt < 2) {
-        await new Promise(r => setTimeout(r, 3000));
-      } else {
-        throw e;
-      }
-    }
-  }
+  const resp = await fetchWithRetry(`${endpoint}?${params}`, {
+    timeout: 120000,
+    maxRetries: 3,
+    retryDelay: 3000,
+  });
+
+  if (!resp.ok) throw new Error(`CFTC HTTP ${resp.status}`);
+  const data: Record<string, unknown>[] = await resp.json();
 
   if (!data.length) return [];
 
@@ -231,11 +263,14 @@ async function fetchYahooPrice(ticker: string, startDate: string, endDate: strin
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?period1=${period1}&period2=${period2}&interval=1d`;
 
   try {
-    const resp = await fetch(url, {
+    const resp = await fetchWithRetry(url, {
       headers: { 'User-Agent': 'Mozilla/5.0' },
-      signal: AbortSignal.timeout(15000),
+      timeout: 15000,
+      maxRetries: 3,
+      retryDelay: 2000,
     });
-    if (!resp.ok) return [];
+
+    if (!resp.ok) return []; // 4xx (except 429) or permanent failure after retries
     const json = await resp.json();
     const result = json?.chart?.result?.[0];
     if (!result) return [];
@@ -248,7 +283,7 @@ async function fetchYahooPrice(ticker: string, startDate: string, endDate: strin
       close: closes[i],
     })).filter(d => d.close != null);
   } catch {
-    return [];
+    return []; // Network error after all retries exhausted
   }
 }
 
@@ -266,31 +301,24 @@ async function fetchTueTueReturns(
   const tueStartStr = tueStart.toISOString().slice(0, 10);
 
   const promises = contracts.filter(c => c.yf).map(async (c) => {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        const data = await fetchYahooPrice(c.yf, fetchStart, fetchEnd);
-        if (data.length < 2) return;
+    const data = await fetchYahooPrice(c.yf, fetchStart, fetchEnd);
+    if (data.length < 2) return;
 
-        const pxEnd = data.filter(d => d.date <= tueEndStr);
-        const pxStart = data.filter(d => d.date <= tueStartStr);
+    const pxEnd = data.filter(d => d.date <= tueEndStr);
+    const pxStart = data.filter(d => d.date <= tueStartStr);
 
-        if (pxEnd.length && pxStart.length) {
-          const p1 = pxStart[pxStart.length - 1].close;
-          const p2 = pxEnd[pxEnd.length - 1].close;
-          const ret = Math.round((p2 / p1 - 1) * 10000) / 100;
-          results[c.name] = {
-            ret,
-            ticker: c.yf,
-            date_start: pxStart[pxStart.length - 1].date.slice(5),
-            date_end: pxEnd[pxEnd.length - 1].date.slice(5),
-            px_start: p1,
-            px_end: p2,
-          };
-        }
-        return;
-      } catch {
-        if (attempt < 1) await new Promise(r => setTimeout(r, 2000));
-      }
+    if (pxEnd.length && pxStart.length) {
+      const p1 = pxStart[pxStart.length - 1].close;
+      const p2 = pxEnd[pxEnd.length - 1].close;
+      const ret = Math.round((p2 / p1 - 1) * 10000) / 100;
+      results[c.name] = {
+        ret,
+        ticker: c.yf,
+        date_start: pxStart[pxStart.length - 1].date.slice(5),
+        date_end: pxEnd[pxEnd.length - 1].date.slice(5),
+        px_start: p1,
+        px_end: p2,
+      };
     }
   });
 
@@ -327,6 +355,97 @@ function buildTable(
       price_chg: pd ? pd.ret : null,
     });
   }
+  return result;
+}
+
+// ============================================================================
+// TIME SERIES EXTRACTION
+// ============================================================================
+
+function extractSeries(
+  rows: CftcRow[],
+  contracts: ContractConfig[],
+  longCol: string,
+  shortCol: string,
+  instruments: Set<string>,
+) {
+  const result: Record<string, { date: string; net: number; net_z: number | null; long: number; short: number }[]> = {};
+
+  for (const c of contracts) {
+    if (instruments.size > 0 && !instruments.has(c.name)) continue;
+
+    const matched = matchCftc(rows, c.cftc);
+    if (!matched || matched.length < 10) continue;
+
+    const dates = matched.map(r => r.report_date);
+    const longS = matched.map(r => (r[longCol] as number) || 0);
+    const shortS = matched.map(r => (r[shortCol] as number) || 0);
+    const oi = matched.map(r => r.open_interest_all || 0);
+
+    const netS = longS.map((l, i) => l - shortS[i]);
+    const netOi = netS.map((n, i) => oi[i] ? n / oi[i] : 0);
+
+    const series: { date: string; net: number; net_z: number | null; long: number; short: number }[] = [];
+
+    for (let i = 0; i < dates.length; i++) {
+      const windowStart = Math.max(0, i - ZSCORE_WINDOW + 1);
+      const windowNetOi = netOi.slice(windowStart, i + 1);
+      let netZ: number | null = null;
+      if (windowNetOi.length >= 10) {
+        const mean = windowNetOi.reduce((s, v) => s + v, 0) / windowNetOi.length;
+        const std = Math.sqrt(windowNetOi.reduce((s, v) => s + (v - mean) ** 2, 0) / windowNetOi.length);
+        if (std > 0) {
+          netZ = Math.round(((netOi[i] - mean) / std) * 10) / 10;
+        }
+      }
+
+      series.push({
+        date: dates[i],
+        net: Math.round(netS[i]),
+        net_z: netZ,
+        long: Math.round(longS[i]),
+        short: Math.round(shortS[i]),
+      });
+    }
+
+    result[c.name] = series;
+  }
+
+  return result;
+}
+
+export async function generateTimeSeries(instruments?: string[]) {
+  const instrumentSet = new Set(instruments || []);
+  const startDate = new Date(Date.now() - LOOKBACK_DAYS * 86400000).toISOString().slice(0, 10);
+
+  const [dfTff, dfDisagg] = await Promise.all([
+    fetchCftc(CFTC_TFF_URL, startDate),
+    fetchCftc(CFTC_DISAGG_URL, startDate),
+  ]);
+
+  const { TFF_CONTRACTS, DISAGG_CONTRACTS } = await import('./contracts');
+
+  const tffSeries = extractSeries(dfTff, TFF_CONTRACTS, 'lev_money_positions_long', 'lev_money_positions_short', instrumentSet);
+  const disaggSeries = extractSeries(dfDisagg, DISAGG_CONTRACTS, 'm_money_positions_long_all', 'm_money_positions_short_all', instrumentSet);
+
+  const result: Record<string, { instrument: string; section: string; series: { date: string; net: number; net_z: number | null; long: number; short: number }[] }> = {};
+
+  for (const c of TFF_CONTRACTS) {
+    if (tffSeries[c.name]) {
+      result[c.name] = { instrument: c.name, section: c.section, series: tffSeries[c.name] };
+    }
+  }
+  for (const c of DISAGG_CONTRACTS) {
+    if (disaggSeries[c.name]) {
+      result[c.name] = { instrument: c.name, section: c.section, series: disaggSeries[c.name] };
+    }
+  }
+
+  // Sort series by date
+  for (const key of Object.keys(result)) {
+    result[key].series.sort((a, b) => a.date.localeCompare(b.date));
+  }
+
   return result;
 }
 
