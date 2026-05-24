@@ -121,56 +121,87 @@ async function fetchCftc(endpoint: string, startDate: string): Promise<CftcRow[]
   });
 }
 
+function pickBestByLatestOi<T>(groups: Map<T, CftcRow[]>): T {
+  let bestKey: T | null = null;
+  let bestOi = -1;
+
+  for (const [key, rows] of groups) {
+    let latestRow = rows[0];
+    for (let i = 1; i < rows.length; i++) {
+      if (rows[i].report_date > latestRow.report_date) latestRow = rows[i];
+    }
+    const oi = latestRow.open_interest_all || 0;
+    if (oi > bestOi) {
+      bestOi = oi;
+      bestKey = key;
+    }
+  }
+
+  return bestKey!;
+}
+
 function matchCftc(rows: CftcRow[], searchPattern: string): CftcRow[] | null {
+  if (!rows.length) return null;
+
   const patternUpper = searchPattern.toUpperCase();
 
-  let matched = rows.filter(r =>
-    r.market_and_exchange_names.toUpperCase() === patternUpper
-  );
-  if (!matched.length) {
-    matched = rows.filter(r =>
-      r.market_and_exchange_names.toUpperCase().startsWith(patternUpper)
-    );
-  }
-  if (!matched.length) {
-    matched = rows.filter(r =>
-      r.market_and_exchange_names.toUpperCase().includes(patternUpper)
-    );
-  }
-  if (!matched.length) return null;
+  const groups = new Map<string, CftcRow[]>();
+  let bestMatchType = 0; // 3=exact  2=prefix  1=includes
 
-  // Pick consolidated or highest OI name
-  const uniqueNames = [...new Set(matched.map(r => r.market_and_exchange_names))];
-  if (uniqueNames.length > 1) {
+  for (const r of rows) {
+    const nameUpper = r.market_and_exchange_names.toUpperCase();
+
+    let matchType = 0;
+    if (nameUpper === patternUpper) {
+      matchType = 3;
+    } else if (nameUpper.startsWith(patternUpper)) {
+      matchType = 2;
+    } else if (nameUpper.includes(patternUpper)) {
+      matchType = 1;
+    }
+
+    if (matchType === 0) continue;
+    if (matchType < bestMatchType) continue;
+
+    if (matchType > bestMatchType) {
+      bestMatchType = matchType;
+      groups.clear();
+    }
+
+    const name = r.market_and_exchange_names;
+    if (!groups.has(name)) groups.set(name, []);
+    groups.get(name)!.push(r);
+  }
+
+  if (groups.size === 0) return null;
+
+  const uniqueNames = [...groups.keys()];
+  let bestName: string;
+
+  if (uniqueNames.length === 1) {
+    bestName = uniqueNames[0];
+  } else {
     const consolidated = uniqueNames.find(n => n.includes('Consolidated'));
-    if (consolidated) {
-      matched = matched.filter(r => r.market_and_exchange_names === consolidated);
-    } else {
-      const avgOi = new Map<string, number>();
-      for (const name of uniqueNames) {
-        const subset = matched.filter(r => r.market_and_exchange_names === name);
-        const avg = subset.reduce((s, r) => s + (r.open_interest_all || 0), 0) / subset.length;
-        avgOi.set(name, avg);
-      }
-      const best = [...avgOi.entries()].sort((a, b) => b[1] - a[1])[0][0];
-      matched = matched.filter(r => r.market_and_exchange_names === best);
-    }
+    bestName = consolidated ?? pickBestByLatestOi(groups);
   }
 
-  // Deduplicate sub-contracts
-  const codes = [...new Set(matched.map(r => r.cftc_contract_market_code).filter(Boolean))];
+  let result = groups.get(bestName)!;
+
+  const codes = [...new Set(result.map(r => r.cftc_contract_market_code).filter(Boolean))];
   if (codes.length > 1) {
-    const avgOi = new Map<string, number>();
-    for (const code of codes) {
-      const subset = matched.filter(r => r.cftc_contract_market_code === code);
-      const avg = subset.reduce((s, r) => s + (r.open_interest_all || 0), 0) / subset.length;
-      avgOi.set(code!, avg);
+    const codeGroups = new Map<string, CftcRow[]>();
+    for (const r of result) {
+      const code = r.cftc_contract_market_code!;
+      if (!codeGroups.has(code)) codeGroups.set(code, []);
+      codeGroups.get(code)!.push(r);
     }
-    const best = [...avgOi.entries()].sort((a, b) => b[1] - a[1])[0][0];
-    matched = matched.filter(r => r.cftc_contract_market_code === best);
+    const bestCode = pickBestByLatestOi(codeGroups);
+    result = codeGroups.get(bestCode)!;
   }
 
-  return matched.sort((a, b) => a.report_date.localeCompare(b.report_date));
+  result.sort((a, b) => a.report_date.localeCompare(b.report_date));
+
+  return result;
 }
 
 // ============================================================================
