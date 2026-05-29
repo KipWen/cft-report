@@ -49,7 +49,9 @@ interface SeriesPoint {
   net: number;
   net_z: number | null;
   long: number;
+  long_z: number | null;
   short: number;
+  short_z: number | null;
 }
 
 interface InstrumentSeries {
@@ -58,7 +60,7 @@ interface InstrumentSeries {
   series: SeriesPoint[];
 }
 
-type Metric = "net" | "net_z";
+type Metric = "net" | "long" | "short" | "net_z" | "long_z" | "short_z";
 
 // ============================================================================
 // Scale detection: if one instrument dwarfs others, split Y-axes
@@ -67,6 +69,7 @@ type Metric = "net" | "net_z";
 function partitionByScale(
   selected: Set<string>,
   allSeries: Record<string, InstrumentSeries>,
+  metric: Metric,
 ) {
   const left = new Set<string>();
   const right = new Set<string>();
@@ -76,13 +79,16 @@ function partitionByScale(
     return { left, right };
   }
 
+  const valueOf = (pt: SeriesPoint) => Math.abs((pt[metric as keyof SeriesPoint] as number) ?? 0);
+
   const ranges: { name: string; maxAbs: number }[] = [];
   for (const name of selected) {
     const s = allSeries[name];
     if (!s) continue;
     let maxAbs = 0;
     for (const pt of s.series) {
-      if (Math.abs(pt.net) > maxAbs) maxAbs = Math.abs(pt.net);
+      const v = valueOf(pt);
+      if (v > maxAbs) maxAbs = v;
     }
     ranges.push({ name, maxAbs });
   }
@@ -130,7 +136,7 @@ function toChartData(
       const s = allSeries[name];
       if (!s) continue;
       const pt = s.series.find((p) => p.date === date);
-      row[name] = pt ? (metric === "net" ? pt.net : pt.net_z) : null;
+      row[name] = pt ? (pt[metric as keyof SeriesPoint] as number) : null;
     }
     return row;
   });
@@ -277,9 +283,9 @@ function ChartTooltip({
           />
           <span className="text-text-secondary flex-1">{item.name}</span>
           <span className="font-semibold text-text-primary tabular-nums">
-            {metric === "net"
-              ? item.value.toLocaleString()
-              : item.value.toFixed(1)}
+            {metric.endsWith("_z")
+              ? item.value.toFixed(1)
+              : item.value.toLocaleString()}
           </span>
         </div>
       ))}
@@ -315,9 +321,9 @@ function TrendChart({
 
   const { left: leftNames, right: rightNames } = useMemo(
     () =>
-      metric === "net"
-        ? partitionByScale(selected, allSeries)
-        : { left: selected, right: new Set<string>() },
+      metric.endsWith("_z")
+        ? { left: selected, right: new Set<string>() }
+        : partitionByScale(selected, allSeries, metric),
     [selected, allSeries, metric],
   );
 
@@ -512,10 +518,9 @@ function TrendChart({
                       x: lastPt.x,
                       y: lastPt.y,
                       color: COLORS[allSelected.indexOf(name) % COLORS.length],
-                      valStr:
-                        metric === "net"
-                          ? val.toLocaleString()
-                          : val.toFixed(1),
+                      valStr: metric.endsWith("_z")
+                        ? val.toFixed(1)
+                        : val.toLocaleString(),
                     });
                   }
 
@@ -644,6 +649,7 @@ export function TrendView() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [highlighted, setHighlighted] = useState<string | null>(null);
+  const [positionMetric, setPositionMetric] = useState<"net" | "long" | "short">("net");
 
   useEffect(() => {
     let cancelled = false;
@@ -796,19 +802,40 @@ export function TrendView() {
               已加载 {availableNames.length} 个品种 · 勾选即时对比 ·
               悬停高亮单个品种
             </p>
+
+            {/* 仓位指标切换 */}
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-[11px] text-text-muted font-medium">仓位指标：</span>
+              <div className="flex rounded-md border border-border-medium overflow-hidden">
+                {(["net", "long", "short"] as const).map((key) => (
+                  <button
+                    key={key}
+                    onClick={() => setPositionMetric(key)}
+                    className={`px-3 py-1 text-[12px] font-medium transition-colors ${
+                      positionMetric === key
+                        ? "bg-accent-primary text-white"
+                        : "bg-bg-white text-text-secondary hover:bg-bg-secondary"
+                    }`}
+                  >
+                    {{ net: "净持仓", long: "多头", short: "空头" }[key]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <TrendChart
               allSeries={allSeries}
               selected={selected}
-              metric="net"
-              title="净持仓（合约数）"
+              metric={positionMetric}
+              title={`${{ net: "净持仓", long: "多头持仓", short: "空头持仓" }[positionMetric]}（合约数）`}
               highlighted={highlighted}
               onHighlight={setHighlighted}
             />
             <TrendChart
               allSeries={allSeries}
               selected={selected}
-              metric="net_z"
-              title="净持仓 Z-Score（156周滚动窗口）"
+              metric={`${positionMetric}_z` as Metric}
+              title={`${{ net: "净持仓", long: "多头持仓", short: "空头持仓" }[positionMetric]} Z-Score（156周滚动窗口）`}
               thresholds={[-2, 0, 2]}
               highlighted={highlighted}
               onHighlight={setHighlighted}
@@ -830,10 +857,13 @@ export function TrendView() {
                   <span className="font-medium text-text-secondary">净持仓：</span>多头合约数 − 空头合约数。正值代表净多头，负值代表净空头。
                 </p>
                 <p>
-                  <span className="font-medium text-text-secondary">Z-Score：</span>基于 156 周（约 3 年）滚动窗口的标准化偏离度，用于衡量当前资金拥挤度在其历史周期中的极端水平。
+                  <span className="font-medium text-text-secondary">多头 / 空头：</span>管理基金或杠杆基金的绝对多头、空头合约数，用于观察单边仓位的水位变化。
+                </p>
+                <p>
+                  <span className="font-medium text-text-secondary">Z-Score：</span>基于 156 周（约 3 年）滚动窗口的标准化偏离度，下方图表自动跟随上方仓位指标切换对应的 Z-Score，用于衡量当前仓位在历史周期中的极端水平。
                 </p>
                 <p className="pt-1.5 mt-1.5 border-t border-border-light/50 text-text-muted">
-                  <span className="font-medium">交互提示：</span>上下两图鼠标同步联动；当对比品种量级差异过大时，系统自动启用右侧独立 Y 轴，避免小量级品种被挤压在 0 轴附近。
+                  <span className="font-medium">交互提示：</span>上下两图鼠标同步联动；仓位指标切换后上下图自动联动；当对比品种量级差异过大时，系统自动启用右侧独立 Y 轴，避免小量级品种被挤压在 0 轴附近。
                 </p>
               </div>
             </div>

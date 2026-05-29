@@ -415,27 +415,30 @@ function extractSeries(
 
     const netS = longS.map((l, i) => l - shortS[i]);
     const netOi = netS.map((n, i) => oi[i] ? n / oi[i] : 0);
+    const longOi = longS.map((l, i) => oi[i] ? l / oi[i] : 0);
+    const shortOi = shortS.map((s, i) => oi[i] ? s / oi[i] : 0);
 
-    const series: { date: string; net: number; net_z: number | null; long: number; short: number }[] = [];
+    const rollingZ = (values: number[], i: number): number | null => {
+      const start = Math.max(0, i - ZSCORE_WINDOW + 1);
+      const window = values.slice(start, i + 1);
+      if (window.length < 10) return null;
+      const mean = window.reduce((s, v) => s + v, 0) / window.length;
+      const std = Math.sqrt(window.reduce((s, v) => s + (v - mean) ** 2, 0) / window.length);
+      if (std === 0) return 0;
+      return Math.round(((values[i] - mean) / std) * 10) / 10;
+    };
+
+    const series: { date: string; net: number; net_z: number | null; long: number; long_z: number | null; short: number; short_z: number | null }[] = [];
 
     for (let i = 0; i < dates.length; i++) {
-      const windowStart = Math.max(0, i - ZSCORE_WINDOW + 1);
-      const windowNetOi = netOi.slice(windowStart, i + 1);
-      let netZ: number | null = null;
-      if (windowNetOi.length >= 10) {
-        const mean = windowNetOi.reduce((s, v) => s + v, 0) / windowNetOi.length;
-        const std = Math.sqrt(windowNetOi.reduce((s, v) => s + (v - mean) ** 2, 0) / windowNetOi.length);
-        if (std > 0) {
-          netZ = Math.round(((netOi[i] - mean) / std) * 10) / 10;
-        }
-      }
-
       series.push({
         date: dates[i],
         net: Math.round(netS[i]),
-        net_z: netZ,
+        net_z: rollingZ(netOi, i),
         long: Math.round(longS[i]),
+        long_z: rollingZ(longOi, i),
         short: Math.round(shortS[i]),
+        short_z: rollingZ(shortOi, i),
       });
     }
 
