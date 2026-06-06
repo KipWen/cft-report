@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import * as fs from 'fs';
-import * as path from 'path';
-import { ReportData } from '@/lib/types';
+import { listReports, loadReport } from '@/lib/storage';
 
 interface SeriesPoint {
   date: string;
@@ -22,14 +20,10 @@ export async function GET(request: NextRequest) {
     : null;
 
   try {
-    const dataDir = path.join(process.cwd(), 'data');
-    if (!fs.existsSync(dataDir)) {
+    const dates = await listReports();
+    if (!dates.length) {
       return NextResponse.json({});
     }
-
-    const files = fs.readdirSync(dataDir)
-      .filter(f => f.endsWith('.json'))
-      .sort();
 
     const seriesMap = new Map<string, {
       instrument: string;
@@ -37,9 +31,9 @@ export async function GET(request: NextRequest) {
       points: SeriesPoint[];
     }>();
 
-    for (const file of files) {
-      const content = fs.readFileSync(path.join(dataDir, file), 'utf-8');
-      const report: ReportData = JSON.parse(content);
+    for (const date of dates) {
+      const report = await loadReport(date);
+      if (!report) continue;
       const allRows = [...report.tff_rows, ...report.disagg_rows];
 
       for (const row of allRows) {
