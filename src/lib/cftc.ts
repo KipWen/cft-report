@@ -484,6 +484,42 @@ export async function generateTimeSeries(instruments?: string[]) {
 }
 
 // ============================================================================
+// LIGHTWEIGHT DATE CHECK — only fetches the latest report_date, no time series
+// ============================================================================
+
+export async function getLatestReportDate(): Promise<string | null> {
+  const params = new URLSearchParams({
+    '$select': 'report_date_as_yyyy_mm_dd',
+    '$order': 'report_date_as_yyyy_mm_dd DESC',
+    '$limit': '1',
+  });
+
+  const [tffResp, disaggResp] = await Promise.all([
+    fetchWithRetry(`${CFTC_TFF_URL}?${params}`, { timeout: 30000, maxRetries: 2, retryDelay: 2000 }),
+    fetchWithRetry(`${CFTC_DISAGG_URL}?${params}`, { timeout: 30000, maxRetries: 2, retryDelay: 2000 }),
+  ]);
+
+  if (!tffResp.ok || !disaggResp.ok) return null;
+
+  const [tffData, disaggData] = await Promise.all([
+    tffResp.json() as Promise<{ report_date_as_yyyy_mm_dd: string }[]>,
+    disaggResp.json() as Promise<{ report_date_as_yyyy_mm_dd: string }[]>,
+  ]);
+
+  const tffDate = tffData[0]?.report_date_as_yyyy_mm_dd?.slice(0, 10);
+  const disaggDate = disaggData[0]?.report_date_as_yyyy_mm_dd?.slice(0, 10);
+
+  if (!tffDate || !disaggDate) return null;
+  if (tffDate !== disaggDate) {
+    throw new Error(
+      `CFTC datasets out of sync: TFF=${tffDate}, Disagg=${disaggDate}`
+    );
+  }
+
+  return tffDate;
+}
+
+// ============================================================================
 // MAIN ENTRY POINT
 // ============================================================================
 
